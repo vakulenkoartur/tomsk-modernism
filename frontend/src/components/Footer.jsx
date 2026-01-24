@@ -1,0 +1,8 @@
+export default function Footer() {
+    return (
+      <footer className="footer">
+        © 2025 Архитектура советского модернизма Томска
+      </footer>
+    );
+  }
+  
