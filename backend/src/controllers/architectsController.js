@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Architect = require('../models/Architect');
+const { deleteStoredImage, uploadImage } = require('../services/storage');
 const asyncHandler = require('../middleware/asyncHandler');
 const { parseJsonArray } = require('../utils/parse');
 const { architectCreateSchema, architectUpdateSchema } = require('../validators/schemas');
@@ -21,8 +22,6 @@ const buildArchitectPayload = (body, file, { defaults = false } = {}) => {
     articleBlocks: articles.value ?? (defaults ? [] : undefined),
   };
 
-  if (file) payload.image = `/architects/${file.filename}`;
-
   return { payload };
 };
 
@@ -41,6 +40,8 @@ const listArchitects = asyncHandler(async (req, res) => {
     items = await Architect.aggregate([
       { $match: query },
       { $sample: { size: parsedLimit } },
+      { $addFields: { id: { $toString: '$_id' } } },
+      { $project: { __v: 0 } },
     ]);
   } else {
     const cursor = Architect.find(query);
@@ -64,16 +65,35 @@ const createArchitect = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: built.error });
   }
 
-  const validationErrors = validatePayload(architectCreateSchema, built.payload);
+  let imageUrl = null;
+  if (req.file) {
+    imageUrl = await uploadImage(req.file, 'architects');
+  }
+
+  const payload = { ...built.payload, ...(imageUrl ? { image: imageUrl } : {}) };
+
+  const validationErrors = validatePayload(architectCreateSchema, payload);
   if (validationErrors) {
+    if (imageUrl) await deleteStoredImage(imageUrl);
     return res.status(400).json({ error: 'Validation error', details: validationErrors });
   }
 
-  const created = await Architect.create(built.payload);
-  res.status(201).json(created);
+  try {
+    const created = await Architect.create(payload);
+    res.status(201).json(created);
+  } catch (err) {
+    if (imageUrl) await deleteStoredImage(imageUrl);
+    throw err;
+  }
 });
 
 const updateArchitect = asyncHandler(async (req, res) => {
+  let existing = null;
+  if (req.file) {
+    existing = await Architect.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+  }
+
   const built = buildArchitectPayload(req.body, req.file);
   if (built.error) {
     return res.status(400).json({ error: built.error });
@@ -84,20 +104,47 @@ const updateArchitect = asyncHandler(async (req, res) => {
     if (updates[key] === undefined) delete updates[key];
   });
 
+  let newImage = null;
+  if (req.file) {
+    newImage = await uploadImage(req.file, 'architects');
+    updates.image = newImage;
+  }
+
   const validationErrors = validatePayload(architectUpdateSchema, updates);
   if (validationErrors) {
+    if (newImage) await deleteStoredImage(newImage);
     return res.status(400).json({ error: 'Validation error', details: validationErrors });
   }
 
   const updated = await Architect.findByIdAndUpdate(req.params.id, updates, { new: true });
-  if (!updated) return res.status(404).json({ error: 'Not found' });
+  if (!updated) {
+    if (newImage) await deleteStoredImage(newImage);
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  if (existing && existing.image && existing.image !== updated.image) {
+    try {
+      await deleteStoredImage(existing.image);
+    } catch (err) {
+      console.error('Failed to delete image', err);
+    }
+  }
 
   res.json(updated);
 });
 
 const deleteArchitect = asyncHandler(async (req, res) => {
-  const deleted = await Architect.findByIdAndDelete(req.params.id);
-  if (!deleted) return res.status(404).json({ error: 'Not found' });
+  const item = await Architect.findById(req.params.id);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+
+  await Architect.findByIdAndDelete(req.params.id);
+  if (item.image) {
+    try {
+      await deleteStoredImage(item.image);
+    } catch (err) {
+      console.error('Failed to delete image', err);
+    }
+  }
   res.json({ message: 'Deleted' });
 });
 

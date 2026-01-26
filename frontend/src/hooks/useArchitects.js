@@ -21,7 +21,7 @@ export function useArchitects() {
   const addArchitect = async (formData) => {
     try {
       const newArchitect = await apiForm('/api/architects', 'POST', formData);
-      setArchitects([...architects, newArchitect]);
+      setArchitects((prev) => [...prev, newArchitect]);
       return newArchitect;
     } catch (err) {
       setError(err.message);
@@ -32,7 +32,7 @@ export function useArchitects() {
   const updateArchitect = async (id, formData) => {
     try {
       const updated = await apiForm(`/api/architects/${id}`, 'PUT', formData);
-      setArchitects(architects.map(a => a.id === id ? updated : a));
+      setArchitects((prev) => prev.map((a) => (a.id === id ? updated : a)));
       return updated;
     } catch (err) {
       setError(err.message);
@@ -43,7 +43,7 @@ export function useArchitects() {
   const deleteArchitect = async (id) => {
     try {
       await apiDelete(`/api/architects/${id}`);
-      setArchitects(architects.filter(a => a.id !== id));
+      setArchitects((prev) => prev.filter((a) => a.id !== id));
     } catch (err) {
       setError(err.message);
       throw err;

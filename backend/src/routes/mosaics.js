@@ -1,5 +1,6 @@
 const express = require('express');
-const upload = require('../middleware/upload');
+const { createUpload } = require('../middleware/upload');
+const upload = createUpload('mosaics');
 const {
   listMosaics,
   getMosaic,

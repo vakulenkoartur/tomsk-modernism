@@ -21,7 +21,7 @@ export function useMosaics() {
   const addMosaic = async (formData) => {
     try {
       const newMosaic = await apiForm('/api/mosaics', 'POST', formData);
-      setMosaics([...mosaics, newMosaic]);
+      setMosaics((prev) => [...prev, newMosaic]);
       return newMosaic;
     } catch (err) {
       setError(err.message);
@@ -32,7 +32,7 @@ export function useMosaics() {
   const updateMosaic = async (id, formData) => {
     try {
       const updated = await apiForm(`/api/mosaics/${id}`, 'PUT', formData);
-      setMosaics(mosaics.map(m => m.id === id ? updated : m));
+      setMosaics((prev) => prev.map((m) => (m.id === id ? updated : m)));
       return updated;
     } catch (err) {
       setError(err.message);
@@ -43,7 +43,7 @@ export function useMosaics() {
   const deleteMosaic = async (id) => {
     try {
       await apiDelete(`/api/mosaics/${id}`);
-      setMosaics(mosaics.filter(m => m.id !== id));
+      setMosaics((prev) => prev.filter((m) => m.id !== id));
     } catch (err) {
       setError(err.message);
       throw err;

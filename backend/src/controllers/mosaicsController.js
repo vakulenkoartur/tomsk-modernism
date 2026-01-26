@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Mosaic = require('../models/Mosaic');
+const { deleteStoredImage, uploadImage } = require('../services/storage');
 const asyncHandler = require('../middleware/asyncHandler');
 const { parseBoolean, parseNumber, parseJsonArray } = require('../utils/parse');
 const { mosaicCreateSchema, mosaicUpdateSchema } = require('../validators/schemas');
@@ -31,8 +32,6 @@ const buildMosaicPayload = (body, file, { defaults = false } = {}) => {
     articleBlocks: articles.value ?? (defaults ? [] : undefined),
   };
 
-  if (file) payload.image = `/mosaics/${file.filename}`;
-
   return { payload };
 };
 
@@ -51,6 +50,8 @@ const listMosaics = asyncHandler(async (req, res) => {
     items = await Mosaic.aggregate([
       { $match: query },
       { $sample: { size: parsedLimit } },
+      { $addFields: { id: { $toString: '$_id' } } },
+      { $project: { __v: 0 } },
     ]);
   } else {
     const cursor = Mosaic.find(query);
@@ -74,16 +75,35 @@ const createMosaic = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: built.error });
   }
 
-  const validationErrors = validatePayload(mosaicCreateSchema, built.payload);
+  let imageUrl = null;
+  if (req.file) {
+    imageUrl = await uploadImage(req.file, 'mosaics');
+  }
+
+  const payload = { ...built.payload, ...(imageUrl ? { image: imageUrl } : {}) };
+
+  const validationErrors = validatePayload(mosaicCreateSchema, payload);
   if (validationErrors) {
+    if (imageUrl) await deleteStoredImage(imageUrl);
     return res.status(400).json({ error: 'Validation error', details: validationErrors });
   }
 
-  const created = await Mosaic.create(built.payload);
-  res.status(201).json(created);
+  try {
+    const created = await Mosaic.create(payload);
+    res.status(201).json(created);
+  } catch (err) {
+    if (imageUrl) await deleteStoredImage(imageUrl);
+    throw err;
+  }
 });
 
 const updateMosaic = asyncHandler(async (req, res) => {
+  let existing = null;
+  if (req.file) {
+    existing = await Mosaic.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+  }
+
   const built = buildMosaicPayload(req.body, req.file);
   if (built.error) {
     return res.status(400).json({ error: built.error });
@@ -94,20 +114,47 @@ const updateMosaic = asyncHandler(async (req, res) => {
     if (updates[key] === undefined) delete updates[key];
   });
 
+  let newImage = null;
+  if (req.file) {
+    newImage = await uploadImage(req.file, 'mosaics');
+    updates.image = newImage;
+  }
+
   const validationErrors = validatePayload(mosaicUpdateSchema, updates);
   if (validationErrors) {
+    if (newImage) await deleteStoredImage(newImage);
     return res.status(400).json({ error: 'Validation error', details: validationErrors });
   }
 
   const updated = await Mosaic.findByIdAndUpdate(req.params.id, updates, { new: true });
-  if (!updated) return res.status(404).json({ error: 'Not found' });
+  if (!updated) {
+    if (newImage) await deleteStoredImage(newImage);
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  if (existing && existing.image && existing.image !== updated.image) {
+    try {
+      await deleteStoredImage(existing.image);
+    } catch (err) {
+      console.error('Failed to delete image', err);
+    }
+  }
 
   res.json(updated);
 });
 
 const deleteMosaic = asyncHandler(async (req, res) => {
-  const deleted = await Mosaic.findByIdAndDelete(req.params.id);
-  if (!deleted) return res.status(404).json({ error: 'Not found' });
+  const item = await Mosaic.findById(req.params.id);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+
+  await Mosaic.findByIdAndDelete(req.params.id);
+  if (item.image) {
+    try {
+      await deleteStoredImage(item.image);
+    } catch (err) {
+      console.error('Failed to delete image', err);
+    }
+  }
   res.json({ message: 'Deleted' });
 });
 

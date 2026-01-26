@@ -21,7 +21,7 @@ export function useObjects() {
   const addObject = async (formData) => {
     try {
       const newObject = await apiForm('/api/objects', 'POST', formData);
-      setObjects([...objects, newObject]);
+      setObjects((prev) => [...prev, newObject]);
       return newObject;
     } catch (err) {
       setError(err.message);
@@ -32,7 +32,7 @@ export function useObjects() {
   const updateObject = async (id, formData) => {
     try {
       const updated = await apiForm(`/api/objects/${id}`, 'PUT', formData);
-      setObjects(objects.map(o => o.id === id ? updated : o));
+      setObjects((prev) => prev.map((o) => (o.id === id ? updated : o)));
       return updated;
     } catch (err) {
       setError(err.message);
@@ -43,7 +43,7 @@ export function useObjects() {
   const deleteObject = async (id) => {
     try {
       await apiDelete(`/api/objects/${id}`);
-      setObjects(objects.filter(o => o.id !== id));
+      setObjects((prev) => prev.filter((o) => o.id !== id));
     } catch (err) {
       setError(err.message);
       throw err;
