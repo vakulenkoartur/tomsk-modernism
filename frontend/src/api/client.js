@@ -18,16 +18,27 @@ async function request(path, options = {}) {
   return response;
 }
 
+async function parseResponse(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 export async function apiGet(path) {
   const response = await request(path);
-  return response.json();
+  return parseResponse(response);
 }
 
 export async function apiForm(path, method, formData) {
   const response = await request(path, { method, body: formData });
-  return response.json();
+  return parseResponse(response);
 }
 
 export async function apiDelete(path) {
-  await request(path, { method: 'DELETE' });
+  const response = await request(path, { method: 'DELETE' });
+  return parseResponse(response);
 }
