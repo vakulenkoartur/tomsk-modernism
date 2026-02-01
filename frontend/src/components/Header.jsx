@@ -31,7 +31,7 @@ export default function Header() {
       <header className="header">
         <nav className="nav">
           <Link className="logo logo-link" to="/" aria-label="На главную">
-            ТОМСК МОДЕРНИЗМ
+            ТОМСКИЙ МОДЕРНИЗМ
           </Link>
           <div className={`nav-links-wrapper ${isMenuOpen ? 'open' : ''}`}>
             <Navigation onNavigate={closeMenu} />
