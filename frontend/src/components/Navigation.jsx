@@ -10,22 +10,22 @@ export default function Navigation({ onNavigate }) {
     { path: '/architects', label: 'Архитекторы' },
     { path: '/mosaics', label: 'Мозаики' },
     { path: '/about', label: 'О проекте' },
-    { path: '/admin', label: 'Админка' },
   ];
 
   return (
     <ul className="nav-links">
       {links.map((link) => (
         <li key={link.path}>
-          <a
+          <button
+            type="button"
             onClick={() => {
               navigate(link.path);
               if (onNavigate) onNavigate();
             }}
-            href="#!"
+            className="nav-link-button"
           >
             {link.label}
-          </a>
+          </button>
         </li>
       ))}
     </ul>
